@@ -1,0 +1,50 @@
+# zie https://www.youtube.com/watch?v=mOEHRRXlv84
+import utime
+from machine import I2C, Pin
+ 
+dev = I2C(1, freq=400000, scl=Pin(22), sda=Pin(21))
+devices = dev.scan()
+for device in devices: print(device)
+address = 72
+
+def readConfig():
+    dev.writeto(address, bytearray([1]))
+    result = dev.readfrom(address, 2)
+    return result[0] << 8 | result[0]
+ 
+def readValueFrom(channel):
+    config = readConfig()
+    config &= ~(7 << 12) & ~(7 << 9)
+    config |= (7 & (4 + channel))<<12
+    config |= (1 << 15)
+    config |= (1 << 9)
+    config = [int(config>>i & 0xff) for i in [8,0]] 
+    dev.writeto(address, bytearray([1] + config))    
+    config = readConfig()
+
+    while (config & 0x8000) == 0: 
+        config = readConfig()
+        
+    dev.writeto(address, bytearray([0]))
+    result = dev.readfrom(address, 2)
+    return result[0]<<8 | result[0]
+
+def readVoltsFrom(channel):
+    value = readValueFrom(channel)
+    return str(((4.096*2)/0xffff) *value)[0:4]
+     
+    #return result[0] << 8 | result[1]
+
+val = [0,0,0,0]
+
+while True:
+    val[0] = readVoltsFrom(0)
+    val[1] = readVoltsFrom(1)
+    val[2] = readVoltsFrom(2)
+    val[3] = readVoltsFrom(3)
+    
+    print (val[0], val[1], val[2], val[3], end='\r')
+        
+    utime.sleep(0.1)
+    
+     
